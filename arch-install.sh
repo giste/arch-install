@@ -400,6 +400,12 @@ function install_kde() {
         sed -i 's/TEMPLATES=Templates/#TEMPLATES=Templates/' /mnt/etc/xdg/user-dirs.defaults
         sed -i 's/PUBLICSHARE=Public/#PUBLICSHARE=Public/' /mnt/etc/xdg/user-dirs.defaults
 
+        mkdir /mnt/etc/sddm.conf.d
+        kde_settings="[Theme]\n"
+        kde_settings="${kde_settings}Current=breeze\n"
+        kde_settings="${kde_settings}CursorTheme=breeze_cursors\n"
+        echo -e "$kde_settings" >>/mnt/etc/sddm.conf.d/kde_settings.conf
+
         arch-chroot /mnt systemctl enable sddm.service
     fi
 }
