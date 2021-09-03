@@ -404,6 +404,41 @@ function install_kde() {
     fi
 }
 
+function install_arch_packages() {
+    print_step "install_arch_packages()"
+
+    if [ "$arch_packages" != "" ]; then
+        pacman_install "$arch_packages"
+    fi
+}
+
+function execute_aur() {
+    local command="$1"
+    arch-chroot /mnt sed -i 's/# %wheel ALL=(ALL) NOPASSWD: ALL$/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
+    arch-chroot /mnt bash -c "su ${sudo_user} -s /usr/bin/bash -c \"${command}\""
+    arch-chroot /mnt sed -i 's/%wheel ALL=(ALL) NOPASSWD: ALL$/# %wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
+}
+
+function yay_install() {
+    execute_aur "yay -S --noconfirm --needed $1"
+}
+
+function install_aur_base() {
+    pacman_install "base-devel git linux-headers"
+
+    command="mkdir -p /home/${sudo_user}/.aur && cd /home/${sudo_user}/.aur && git clone https://aur.archlinux.org/yay.git && (cd yay && makepkg -si --noconfirm) && rm -rf /home/${sudo_user}/.aur/yay"
+    execute_aur "$command"
+}
+
+function install_aur_packages() {
+    print_step "install_aur_packages()"
+
+    if [ "$install_aur" == "true" ]; then
+        install_aur_base
+        yay_install "$aur_packages"
+    fi
+}
+
 function config_printer() {
     if [ "$config_printer" == "true" ]; then
         pacman_install "cups cups-pdf print-manager system-config-printer avahi nss-mdns sane-airscan"
@@ -419,8 +454,10 @@ function config_printer() {
 
 function config_optimus() {
     if [ "$config_optimus" == "true" ]; then
-        local command="yay -Syu --noconfirm --needed optimus-manager optimus-manager-qt"
-        execute_aur "$command"
+        if [ "$install_aur" != "true" ]; then
+            install_aur_base
+        fi
+        yay_install "optimus-manager optimus-manager-qt"
 
         local nvidia_setup="mon1=HDMI-0\n"
         nvidia_setup="${nvidia_setup}mon2=eDP-1-1\n"
@@ -436,53 +473,23 @@ function config_optimus() {
     fi
 }
 
+function install_vmware() {
+    if [ "$vmware" != "true" ] && [ "$install_vmware" == "true" ]; then
+        if [ "$install_aur" != "true" ]; then
+            install_aur_base
+        fi
+        yay_install "vmware-workstation"
+        arch-chroot /mnt systemctl enable vmware-networks.service
+        arch-chroot /mnt systemctl enable vmware-usbarbitrator.service
+    fi
+}
+
 function config_desktop() {
-    print_step "grub()"
+    print_step "config_desktop()"
 
     config_printer
     config_optimus
-}
-
-function install_arch_packages() {
-    print_step "install_arch_packages()"
-
-    if [ "$arch_packages" != "" ]; then
-        pacman_install "$arch_packages"
-    fi
-}
-
-function install_yay() {
-    pacman_install "base-devel git"
-
-    arch-chroot /mnt sed -i 's/# %wheel ALL=(ALL) NOPASSWD: ALL$/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
-
-    command="rm -rf /home/${sudo_user}/.aur/yay && mkdir -p /home/${sudo_user}/.aur && cd /home/${sudo_user}/.aur && git clone https://aur.archlinux.org/yay.git && (cd yay && makepkg -si --noconfirm) && rm -rf /home/${sudo_user}/.aur/yay"
-    arch-chroot /mnt bash -c "su ${sudo_user} -s /usr/bin/bash -c \"${command}\""
-
-    arch-chroot /mnt sed -i 's/%wheel ALL=(ALL) NOPASSWD: ALL$/# %wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
-}
-
-function execute_aur() {
-    local command="$1"
-    arch-chroot /mnt bash -c "su ${sudo_user} -s /usr/bin/bash -c \"${command}\""
-}
-
-function install_aur_packages() {
-    print_step "install_aur_packages()"
-
-    if [ "$install_aur" == "true" ]; then
-        pacman_install "base-devel git"
-
-        arch-chroot /mnt sed -i 's/# %wheel ALL=(ALL) NOPASSWD: ALL$/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
-
-        command="mkdir -p /home/${sudo_user}/.aur && cd /home/${sudo_user}/.aur && git clone https://aur.archlinux.org/yay.git && (cd yay && makepkg -si --noconfirm) && rm -rf /home/${sudo_user}/.aur/yay"
-        execute_aur "$command"
-
-        command="yay -Syu --noconfirm --needed ${aur_packages}"
-        execute_aur "$command"
-
-        arch-chroot /mnt sed -i 's/%wheel ALL=(ALL) NOPASSWD: ALL$/# %wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
-    fi
+    install_vmware
 }
 
 function grub() {
@@ -512,13 +519,13 @@ function main() {
     install_base
     configure
     create_users
-    #install_xorg
-    #install_kde
-    #config_desktop
-    #install_arch_packages
-    #install_aur_packages
+    install_xorg
+    install_kde
+    install_arch_packages
+    install_aur_packages
+    config_desktop
 
-    #grub
+    grub
     cleanup
 }
 
