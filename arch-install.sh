@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Global variables
 conf_file="arch-install.conf"
@@ -31,7 +32,9 @@ vmware="false"
 
 function init_log() {
     if [ "$log" == "true" ]; then
-        rm "$log_file"
+        if [ -f "$log_file" ]; then
+            rm "$log_file"
+        fi
         exec > >(tee -a $log_file)
         exec 2> >(tee -a $log_file >&2)
     fi
@@ -490,12 +493,21 @@ function install_vmware() {
     fi
 }
 
-function config_desktop() {
+function install_snapper() {
+    if [ "$install_snapper" == "true" ]; then
+        pacman_install "snapper snap-pac"
+        cp /mnt/etc/snapper/config-templates/default /mnt/etc/snapper/configs/root
+        sed -i 's/SNAPPER_CONFIGS=\"\"/SNAPPER_CONFIGS=\"root\"/' /mnt/etc/conf.d/snapper
+    fi
+}
+
+function config_system() {
     print_step "config_desktop()"
 
     config_printer
     config_optimus
     install_vmware
+    install_snapper
 }
 
 function grub() {
@@ -529,7 +541,7 @@ function main() {
     install_kde
     install_arch_packages
     install_aur_packages
-    config_desktop
+    config_system
 
     grub
     cleanup
