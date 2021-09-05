@@ -367,50 +367,49 @@ function install_video_driver() {
 function install_xorg() {
     print_step "install_xorg()"
 
-    if [ "$install_xorg" == "true" ]; then
-        pacman_install "xorg-server"
+    pacman_install "xorg-server"
 
-        IFS=' '
-        for driver in $video_drivers; do
-            install_video_driver $driver
-        done
+    IFS=' '
+    for driver in $video_drivers; do
+        install_video_driver $driver
+    done
 
-        keyboard_conf="# Written by systemd-localed(8), read by systemd-localed and Xorg. It's\n"
-        keyboard_conf="${keyboard_conf}# probably wise not to edit this file manually. Use localectl(1) to\n"
-        keyboard_conf="${keyboard_conf}# instruct systemd-localed to update it.\n"
-        keyboard_conf="${keyboard_conf}Section \"InputClass\"\n"
-        keyboard_conf="${keyboard_conf}\tIdentifier \"system-keyboard\"\n"
-        keyboard_conf="${keyboard_conf}\tMatchIsKeyboard \"on\"\n"
-        keyboard_conf="${keyboard_conf}\tOption \"XkbLayout\" \"es\"\n"
-        keyboard_conf="${keyboard_conf}\tOption \"XkbModel\" \"pc105\"\n"
-        keyboard_conf="${keyboard_conf}\tOption \"XkbOptions\" \"terminate:ctrl_alt_bksp\"\n"
-        keyboard_conf="${keyboard_conf}EndSection\n"
+    keyboard_conf="# Written by systemd-localed(8), read by systemd-localed and Xorg. It's\n"
+    keyboard_conf="${keyboard_conf}# probably wise not to edit this file manually. Use localectl(1) to\n"
+    keyboard_conf="${keyboard_conf}# instruct systemd-localed to update it.\n"
+    keyboard_conf="${keyboard_conf}Section \"InputClass\"\n"
+    keyboard_conf="${keyboard_conf}\tIdentifier \"system-keyboard\"\n"
+    keyboard_conf="${keyboard_conf}\tMatchIsKeyboard \"on\"\n"
+    keyboard_conf="${keyboard_conf}\tOption \"XkbLayout\" \"es\"\n"
+    keyboard_conf="${keyboard_conf}\tOption \"XkbModel\" \"pc105\"\n"
+    keyboard_conf="${keyboard_conf}\tOption \"XkbOptions\" \"terminate:ctrl_alt_bksp\"\n"
+    keyboard_conf="${keyboard_conf}EndSection\n"
 
-        echo -e "$keyboard_conf" >>/mnt/etc/X11/xorg.conf.d/00-keyboard.conf
-    fi
+    echo -e "$keyboard_conf" >>/mnt/etc/X11/xorg.conf.d/00-keyboard.conf
 }
 
 function install_kde() {
     print_step "install_kde()"
 
-    if [ "$install_kde" == "true" ]; then
-        pacman_install "$kde_base"
-        pacman_install "$kde_graphics"
-        pacman_install "$kde_multimedia"
-        pacman_install "$kde_system"
-        pacman_install "$kde_utilities"
+    pacman_install "$kde_base"
+    pacman_install "$kde_graphics"
+    pacman_install "$kde_multimedia"
+    pacman_install "$kde_system"
+    pacman_install "$kde_utilities"
 
-        sed -i 's/TEMPLATES=Templates/#TEMPLATES=Templates/' /mnt/etc/xdg/user-dirs.defaults
-        sed -i 's/PUBLICSHARE=Public/#PUBLICSHARE=Public/' /mnt/etc/xdg/user-dirs.defaults
+    sed -i 's/TEMPLATES=Templates/#TEMPLATES=Templates/' /mnt/etc/xdg/user-dirs.defaults
+    sed -i 's/PUBLICSHARE=Public/#PUBLICSHARE=Public/' /mnt/etc/xdg/user-dirs.defaults
 
-        mkdir /mnt/etc/sddm.conf.d
-        kde_settings="[Theme]\n"
-        kde_settings="${kde_settings}Current=breeze\n"
-        kde_settings="${kde_settings}CursorTheme=breeze_cursors\n"
-        echo -e "$kde_settings" >>/mnt/etc/sddm.conf.d/kde_settings.conf
+    mkdir /mnt/etc/sddm.conf.d
+    kde_settings="[Theme]\n"
+    kde_settings="${kde_settings}Current=breeze\n"
+    kde_settings="${kde_settings}CursorTheme=breeze_cursors\n"
+    kde_settings="${kde_settings}Font=Noto Sans,11,-1,5,50,0,0,0,0,0\n"
+    kde_settings="${kde_settings}\n[X11]\n"
+    kde_settings="${kde_settings}ServerArguments=-dpi 120\n"
+    echo -e "$kde_settings" >>/mnt/etc/sddm.conf.d/kde_settings.conf
 
-        arch-chroot /mnt systemctl enable sddm.service
-    fi
+    arch-chroot /mnt systemctl enable sddm.service
 }
 
 function install_arch_packages() {
@@ -442,10 +441,8 @@ function install_aur_base() {
 function install_aur_packages() {
     print_step "install_aur_packages()"
 
-    if [ "$install_aur" == "true" ]; then
-        install_aur_base
-        yay_install "$aur_packages"
-    fi
+    install_aur_base
+    yay_install "$aur_packages"
 }
 
 function config_printer() {
@@ -537,10 +534,16 @@ function main() {
     install_base
     configure
     create_users
-    install_xorg
-    install_kde
+    if [ "$install_xorg" == "true" ]; then
+        install_xorg
+    fi
+    if [ "$install_kde" == "true" ]; then
+        install_kde
+    fi
     install_arch_packages
-    install_aur_packages
+    if [ "$install_aur" == "true" ]; then
+        install_aur_packages
+    fi
     config_system
 
     grub
