@@ -256,7 +256,7 @@ function do_install() {
     sed -i 's/#Color/Color/' /etc/pacman.conf
     sed -i 's/#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
 
-    pacstrap /mnt base linux linux-firmware nano amd-ucode btrfs-progs sudo
+    pacstrap /mnt base linux linux-firmware nano amd-ucode btrfs-progs sudo pacman-contrib
 
     sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
     sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
@@ -309,6 +309,9 @@ function do_config() {
     if [ "$vmware" == "true" ]; then
         configure_vmware
     fi
+
+    # Clean pacman cache weekly
+    arch-chroot /mnt systemctl enable paccache.timer
 }
 
 function ask_password() {
