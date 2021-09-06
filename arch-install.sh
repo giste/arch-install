@@ -4,6 +4,7 @@ set -euo pipefail
 # Global variables
 conf_file="arch-install.conf"
 log_file="arch-install.log"
+var_file="arch-install.var"
 
 # Partition devices
 efi_part=""
@@ -21,7 +22,6 @@ format_data="false"
 
 # User with sudo privileges
 sudo_user=""
-#sudo_password=""
 
 # Users
 user_name=""
@@ -42,7 +42,7 @@ function init_log() {
 }
 
 function print_step() {
-    step="$1"
+    local step="$1"
     echo "******************************"
     echo -e "${step}"
     echo "******************************"
@@ -265,7 +265,9 @@ function install_base() {
 }
 
 function pacman_install() {
-    IFS=" " read -r -a packages <<<"$1"
+    local packages=()
+    #IFS=" " 
+    read -r -a packages <<<"$1"
     arch-chroot /mnt pacman -S --noconfirm --needed "${packages[@]}"
 }
 
@@ -289,7 +291,7 @@ function configure() {
 
     # Configure network
     echo "$hostname" >/mnt/etc/hostname
-    hosts_content="127.0.0.1\tlocalhost\n"
+    local hosts_content="127.0.0.1\tlocalhost\n"
     hosts_content="${hosts_content}::1\t\tlocalhost\n"
     hosts_content="${hosts_content}127.0.1.1\t${hostname}.localdomain\t${hostname}"
     echo -e "$hosts_content" >>/mnt/etc/hosts
@@ -313,7 +315,7 @@ function ask_password() {
     local password
     local password_retype
 
-    typed="false"
+    local typed="false"
     while [ "$typed" != "true" ]; do
         read -rsp "Type password for ${user_name}: " password
         echo ""
@@ -331,7 +333,7 @@ function ask_password() {
 function create_users() {
     print_step "create_users()"
 
-    local user_array
+    local user_array=()
     read -ra user_array <<<"$users"
 
     for i in "${!user_array[@]}"; do
@@ -341,7 +343,6 @@ function create_users() {
             arch-chroot /mnt useradd -m -G wheel "$user_name"
             arch-chroot /mnt passwd -l root
             sudo_user="$user_name"
-            #sudo_password="$user_password"
         else
             arch-chroot /mnt useradd -m "$user_name"
         fi
@@ -367,49 +368,53 @@ function install_video_driver() {
 function install_xorg() {
     print_step "install_xorg()"
 
-    pacman_install "xorg-server"
+    if [ "$install_xorg" == "true" ]; then
+        pacman_install "xorg-server"
 
-    IFS=' '
-    for driver in $video_drivers; do
-        install_video_driver $driver
-    done
+        #IFS=' '
+        for driver in $video_drivers; do
+            install_video_driver $driver
+        done
 
-    keyboard_conf="# Written by systemd-localed(8), read by systemd-localed and Xorg. It's\n"
-    keyboard_conf="${keyboard_conf}# probably wise not to edit this file manually. Use localectl(1) to\n"
-    keyboard_conf="${keyboard_conf}# instruct systemd-localed to update it.\n"
-    keyboard_conf="${keyboard_conf}Section \"InputClass\"\n"
-    keyboard_conf="${keyboard_conf}\tIdentifier \"system-keyboard\"\n"
-    keyboard_conf="${keyboard_conf}\tMatchIsKeyboard \"on\"\n"
-    keyboard_conf="${keyboard_conf}\tOption \"XkbLayout\" \"es\"\n"
-    keyboard_conf="${keyboard_conf}\tOption \"XkbModel\" \"pc105\"\n"
-    keyboard_conf="${keyboard_conf}\tOption \"XkbOptions\" \"terminate:ctrl_alt_bksp\"\n"
-    keyboard_conf="${keyboard_conf}EndSection\n"
+        local keyboard_conf="# Written by systemd-localed(8), read by systemd-localed and Xorg. It's\n"
+        keyboard_conf="${keyboard_conf}# probably wise not to edit this file manually. Use localectl(1) to\n"
+        keyboard_conf="${keyboard_conf}# instruct systemd-localed to update it.\n"
+        keyboard_conf="${keyboard_conf}Section \"InputClass\"\n"
+        keyboard_conf="${keyboard_conf}\tIdentifier \"system-keyboard\"\n"
+        keyboard_conf="${keyboard_conf}\tMatchIsKeyboard \"on\"\n"
+        keyboard_conf="${keyboard_conf}\tOption \"XkbLayout\" \"es\"\n"
+        keyboard_conf="${keyboard_conf}\tOption \"XkbModel\" \"pc105\"\n"
+        keyboard_conf="${keyboard_conf}\tOption \"XkbOptions\" \"terminate:ctrl_alt_bksp\"\n"
+        keyboard_conf="${keyboard_conf}EndSection\n"
 
-    echo -e "$keyboard_conf" >>/mnt/etc/X11/xorg.conf.d/00-keyboard.conf
+        echo -e "$keyboard_conf" >>/mnt/etc/X11/xorg.conf.d/00-keyboard.conf
+    fi
 }
 
 function install_kde() {
     print_step "install_kde()"
 
-    pacman_install "$kde_base"
-    pacman_install "$kde_graphics"
-    pacman_install "$kde_multimedia"
-    pacman_install "$kde_system"
-    pacman_install "$kde_utilities"
+    if [ "$install_kde" == "true" ]; then
+        pacman_install "$kde_base"
+        pacman_install "$kde_graphics"
+        pacman_install "$kde_multimedia"
+        pacman_install "$kde_system"
+        pacman_install "$kde_utilities"
 
-    sed -i 's/TEMPLATES=Templates/#TEMPLATES=Templates/' /mnt/etc/xdg/user-dirs.defaults
-    sed -i 's/PUBLICSHARE=Public/#PUBLICSHARE=Public/' /mnt/etc/xdg/user-dirs.defaults
+        sed -i 's/TEMPLATES=Templates/#TEMPLATES=Templates/' /mnt/etc/xdg/user-dirs.defaults
+        sed -i 's/PUBLICSHARE=Public/#PUBLICSHARE=Public/' /mnt/etc/xdg/user-dirs.defaults
 
-    mkdir /mnt/etc/sddm.conf.d
-    kde_settings="[Theme]\n"
-    kde_settings="${kde_settings}Current=breeze\n"
-    kde_settings="${kde_settings}CursorTheme=breeze_cursors\n"
-    kde_settings="${kde_settings}Font=Noto Sans,11,-1,5,50,0,0,0,0,0\n"
-    kde_settings="${kde_settings}\n[X11]\n"
-    kde_settings="${kde_settings}ServerArguments=-dpi 120\n"
-    echo -e "$kde_settings" >>/mnt/etc/sddm.conf.d/kde_settings.conf
+        mkdir /mnt/etc/sddm.conf.d
+        local kde_settings="[Theme]\n"
+        kde_settings="${kde_settings}Current=breeze\n"
+        kde_settings="${kde_settings}CursorTheme=breeze_cursors\n"
+        kde_settings="${kde_settings}Font=Noto Sans,11,-1,5,50,0,0,0,0,0\n"
+        kde_settings="${kde_settings}\n[X11]\n"
+        kde_settings="${kde_settings}ServerArguments=-dpi 120\n"
+        echo -e "$kde_settings" >>/mnt/etc/sddm.conf.d/kde_settings.conf
 
-    arch-chroot /mnt systemctl enable sddm.service
+        arch-chroot /mnt systemctl enable sddm.service
+    fi
 }
 
 function install_arch_packages() {
@@ -441,8 +446,10 @@ function install_aur_base() {
 function install_aur_packages() {
     print_step "install_aur_packages()"
 
-    install_aur_base
-    yay_install "$aur_packages"
+    if [ "$install_aur" == "true" ]; then
+        install_aur_base
+        yay_install "$aur_packages"
+    fi
 }
 
 function config_printer() {
@@ -475,7 +482,7 @@ function config_optimus() {
         nvidia_setup="${nvidia_setup}\txrandr --output \"\$mon1\" --auto --output \"\$mon2\" --right-of \"\$mon1\" --auto\n"
         nvidia_setup="${nvidia_setup}fi"
 
-        echo "$nvidia_setup" >>/mnt/etc/optimus-manager/xsetup-nvidia.sh
+        echo -e "$nvidia_setup" >>/mnt/etc/optimus-manager/xsetup-nvidia.sh
     fi
 }
 
@@ -510,7 +517,7 @@ function config_system() {
 function grub() {
     print_step "grub()"
 
-    pacman_install "grub efibootmgr"
+    arch-chroot /mnt bash -c "SNAP_PAC_SKIP=y pacman -S --noconfirm --needed grub efibootmgr"
     arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
 
     if [ "$grub_removable" = "true" ]; then
@@ -526,28 +533,71 @@ function cleanup() {
     umount -R /mnt
 }
 
-function main() {
-    init
-    partition_disk
-    format_partitions
-    mount_partitions
-    install_base
-    configure
-    create_users
-    if [ "$install_xorg" == "true" ]; then
-        install_xorg
-    fi
-    if [ "$install_kde" == "true" ]; then
-        install_kde
-    fi
-    install_arch_packages
-    if [ "$install_aur" == "true" ]; then
-        install_aur_packages
-    fi
-    config_system
+function save_variables() {
+    # if [ -f "$var_file" ]; then
+    #     rm "$var_file"
+    # fi
+    local variables="efi_part=${efi_part}\n"
+    variables="${variables}swap_part=${swap_part}\n"
+    variables="${variables}root_part=${root_part}\n"
+    variables="${variables}home_part=${home_part}\n"
+    variables="${variables}data_part=${data_part}\n"
+    variables="${variables}format_efi=${format_efi}\n"
+    variables="${variables}format_swap=${format_swap}\n"
+    variables="${variables}format_root=${format_root}\n"
+    variables="${variables}format_home=${format_home}\n"
+    variables="${variables}format_data=${format_data}\n"
+    variables="${variables}sudo_user=${sudo_user}\n"
+    variables="${variables}user_name=${user_name}\n"
+    variables="${variables}user_password=${user_password}\n"
+    variables="${variables}vmware=${vmware}"
 
-    grub
-    cleanup
+    echo -e "$variables" >"$var_file"
 }
 
-main
+function load_variables() {
+    if [ -f "$var_file" ]; then
+        # shellcheck disable=SC1090
+        source "$var_file"
+    fi
+}
+
+function do_step() {
+    local step="$1"
+    local steps="$2"
+
+    if [[ " $steps " =~ $step ]]; then
+        eval "$step"
+        save_variables
+    fi
+}
+
+function do_steps() {
+    local steps="$1"
+    local step_array=()
+    read -ra step_array <<<"$steps"
+
+    for step in "${step_array[@]}"; do
+        do_step "$step" "$steps"
+    done
+}
+
+function main() {
+    local step=""
+    local steps="partition_disk format_partitions mount_partitions install_base configure create_users install_xorg install_kde install_arch_packages install_aur_packages config_system grub cleanup"
+    
+    if [ "$#" != 0 ]; then
+        step="$1"
+    fi
+
+    init
+    load_variables
+
+    if [ "$step" != "" ]; then
+        do_step "$step" "$steps"
+    else
+        do_steps "$steps"
+    fi
+}
+
+main "$@"
