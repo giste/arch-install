@@ -124,8 +124,8 @@ function partition_custom() {
     partprobe "$disk"
 }
 
-function partition_disk() {
-    print_step "partition_disk()"
+function do_partition() {
+    print_step "do_partition()"
 
     if [ "$partition_scheme" = "auto" ]; then
         partition_auto
@@ -179,8 +179,8 @@ function format_custom() {
     fi
 }
 
-function format_partitions() {
-    print_step "format_partitions()"
+function do_format() {
+    print_step "do_format()"
 
     if [ "$partition_scheme" = "auto" ]; then
         format_auto
@@ -240,8 +240,8 @@ function mount_custom() {
     fi
 }
 
-function mount_partitions() {
-    print_step "mount_partitions()"
+function do_mount() {
+    print_step "do_mount()"
 
     if [ "$partition_scheme" = "auto" ]; then
         mount_auto
@@ -250,8 +250,8 @@ function mount_partitions() {
     fi
 }
 
-function install_base() {
-    print_step "install_base()"
+function do_install() {
+    print_step "do_install()"
 
     sed -i 's/#Color/Color/' /etc/pacman.conf
     sed -i 's/#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
@@ -276,8 +276,8 @@ function configure_vmware() {
     arch-chroot /mnt systemctl enable vmtoolsd.service
 }
 
-function configure() {
-    print_step "configure()"
+function do_config() {
+    print_step "do_config()"
 
     arch-chroot /mnt ln -s -f /usr/share/zoneinfo/"$timezone" /etc/localtime
     arch-chroot /mnt hwclock --systohc
@@ -330,8 +330,8 @@ function ask_password() {
     done
 }
 
-function create_users() {
-    print_step "create_users()"
+function do_users() {
+    print_step "do_users()"
 
     local user_array=()
     read -ra user_array <<<"$users"
@@ -365,8 +365,8 @@ function install_video_driver() {
     esac
 }
 
-function install_xorg() {
-    print_step "install_xorg()"
+function do_xorg() {
+    print_step "do_xorg()"
 
     if [ "$install_xorg" == "true" ]; then
         pacman_install "xorg-server"
@@ -391,8 +391,8 @@ function install_xorg() {
     fi
 }
 
-function install_kde() {
-    print_step "install_kde()"
+function do_kde() {
+    print_step "do_kde()"
 
     if [ "$install_kde" == "true" ]; then
         pacman_install "$kde_base"
@@ -417,8 +417,8 @@ function install_kde() {
     fi
 }
 
-function install_arch_packages() {
-    print_step "install_arch_packages()"
+function do_packages() {
+    print_step "do_packages()"
 
     if [ "$arch_packages" != "" ]; then
         pacman_install "$arch_packages"
@@ -443,8 +443,8 @@ function install_aur_base() {
     execute_aur "$command"
 }
 
-function install_aur_packages() {
-    print_step "install_aur_packages()"
+function do_aur() {
+    print_step "do_aur()"
 
     if [ "$install_aur" == "true" ]; then
         install_aur_base
@@ -505,8 +505,8 @@ function install_snapper() {
     fi
 }
 
-function config_system() {
-    print_step "config_desktop()"
+function do_customize() {
+    print_step "do_customize()"
 
     config_printer
     config_optimus
@@ -514,8 +514,8 @@ function config_system() {
     install_snapper
 }
 
-function grub() {
-    print_step "grub()"
+function do_grub() {
+    print_step "do_grub()"
 
     arch-chroot /mnt bash -c "SNAP_PAC_SKIP=y pacman -S --noconfirm --needed grub efibootmgr"
     arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
@@ -527,8 +527,8 @@ function grub() {
     arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
 }
 
-function cleanup() {
-    print_step "cleanup()"
+function do_cleanup() {
+    print_step "do_cleanup()"
 
     umount -R /mnt
 }
@@ -584,7 +584,7 @@ function do_steps() {
 
 function main() {
     local step=""
-    local steps="partition_disk format_partitions mount_partitions install_base configure create_users install_xorg install_kde install_arch_packages install_aur_packages config_system grub cleanup"
+    local steps="do_partition do_format do_mount do_install do_config do_users do_xorg do_kde do_packages do_aur do_customize do_grub do_cleanup"
     
     if [ "$#" != 0 ]; then
         step="$1"
