@@ -269,7 +269,7 @@ function do_install() {
 
 function pacman_install() {
     local packages=()
-    #IFS=" " 
+    #IFS=" "
     read -r -a packages <<<"$1"
     arch-chroot /mnt pacman -S --noconfirm --needed "${packages[@]}"
 }
@@ -492,6 +492,15 @@ function config_optimus() {
     fi
 }
 
+function config_lid_switch() {
+    if [ "$config_lid_switch" == "true" ]; then
+        lid_config="HandleLidSwitch=ignore\n"
+        lid_config="${lid_config}HandleLidSwitchExternalPower=ignore\n"
+        lid_config="${lid_config}HandleLidSwitchDocked=ignore\n"
+        echo -e "$lid_config" >>/mnt/etc/systemd/logind.conf
+    fi
+}
+
 function install_vmware() {
     if [ "$vmware" != "true" ] && [ "$install_vmware" == "true" ]; then
         if [ "$install_aur" != "true" ]; then
@@ -516,6 +525,7 @@ function do_customize() {
 
     config_printer
     config_optimus
+    config_lid_switch
     install_vmware
     install_snapper
 }
@@ -533,6 +543,9 @@ function do_grub() {
     if [ "$nvidia_driver" == "true" ]; then
         sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia-drm.modeset=1"/' /mnt/etc/default/grub
     fi
+
+    sed -i 's/GRUB_TIMEOUT=5/GRUB_TIMEOUT=2/' /mnt/etc/default/grub
+
     arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
 }
 
@@ -595,7 +608,7 @@ function do_steps() {
 function main() {
     local step=""
     local steps="do_partition do_format do_mount do_install do_config do_users do_xorg do_kde do_packages do_aur do_customize do_grub do_cleanup"
-    
+
     if [ "$#" != 0 ]; then
         step="$1"
     fi
