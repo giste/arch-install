@@ -30,6 +30,9 @@ user_password=""
 # VMware
 vmware="false"
 
+# Nvidia
+nvidia_driver="false"
+
 function init_log() {
     if [ "$log" == "true" ]; then
         if [ -f "$log_file" ]; then
@@ -357,7 +360,7 @@ function install_video_driver() {
     case $1 in
     "nvidia")
         pacman_install "nvidia nvidia-utils"
-        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia-drm.modeset=1"/' /mnt/etc/default/grub
+        nvidia_driver="true"
         ;;
     "amdgpu")
         pacman_install "xf86-video-amdgpu"
@@ -527,6 +530,9 @@ function do_grub() {
         arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --removable
     fi
 
+    if [ "$nvidia_driver" == "true" ]; then
+        sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"/GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia-drm.modeset=1"/' /mnt/etc/default/grub
+    fi
     arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
 }
 
@@ -553,7 +559,8 @@ function save_variables() {
     variables="${variables}sudo_user=${sudo_user}\n"
     variables="${variables}user_name=${user_name}\n"
     variables="${variables}user_password=${user_password}\n"
-    variables="${variables}vmware=${vmware}"
+    variables="${variables}vmware=${vmware}\n"
+    variables="${variables}nvidia_driver=${nvidia_driver}\n"
 
     echo -e "$variables" >"$var_file"
 }
