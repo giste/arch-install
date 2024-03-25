@@ -137,24 +137,9 @@ function do_partition() {
     fi
 }
 
-function create_subvolumes() {
-    mount -t btrfs "$root_part" /mnt
-    btrfs subvolume create /mnt/@
-    btrfs subvolume create /mnt/@.snapshots
-    if [ "$1" = "true" ]; then
-        btrfs subvolume create /mnt/@home
-    fi
-    btrfs subvolume create /mnt/@tmp
-    btrfs subvolume create /mnt/@var_cache
-    btrfs subvolume create /mnt/@var_log
-    btrfs subvolume create /mnt/@var_tmp
-    umount /mnt
-}
-
 function format_auto() {
     mkfs.fat -F32 -I -n "$efi_label" "$efi_part"
-    mkfs.btrfs -f -L "$root_label" "$root_part"
-    create_subvolumes "true"
+    mkfs.ext4 -F -L "$root_label" "$root_part"
 }
 
 function format_custom() {
@@ -167,14 +152,11 @@ function format_custom() {
     fi
 
     if [ "$format_root" = "true" ]; then
-        mkfs.btrfs -f -L "$root_label" "$root_part"
+        mkfs.ext4 -F -L "$root_label" "$root_part"
     fi
 
     if [ "$format_home" = "true" ]; then
         mkfs.ext4 -F -L "$home_label" "$home_part"
-        create_subvolumes "false"
-    else
-        create_subvolumes "true"
     fi
 
     if [ "$format_data" = "true" ]; then
@@ -192,29 +174,13 @@ function do_format() {
     fi
 }
 
-function mount_subvolumes() {
-    mount -o subvol=@.snapshots "$root_part" /mnt/.snapshots
-    mount -o subvol=@tmp "$root_part" /mnt/tmp
-    mount -o subvol=@var_cache "$root_part" /mnt/var/cache
-    mount -o subvol=@var_log "$root_part" /mnt/var/log
-    mount -o subvol=@var_tmp "$root_part" /mnt/var/tmp
-    if [ "$1" = "true" ]; then
-        mount -o subvol=@home "$root_part" /mnt/home
-    fi
-}
-
 function mount_common() {
-    mount -o subvol=@ "$root_part" /mnt
-
-    mkdir /mnt/{efi,.snapshots,home,mnt,tmp,var}
-    mkdir /mnt/var/{cache,log,tmp}
-
-    mount "$efi_part" /mnt/efi
+    mount "$root_part" /mnt
+    mount --mkdir "$efi_part" /mnt"$efi_dir"
 }
 
 function mount_auto() {
     mount_common
-    mount_subvolumes "true"
 }
 
 function mount_custom() {
@@ -225,21 +191,15 @@ function mount_custom() {
     fi
 
     if [ "$keep_home" = "true" ]; then
-        mount "$home_part" /mnt/home
-        mount_subvolumes "false"
+        mount --mkdir "$home_part" /mnt/home
     elif [ "$format_home" = "true" ]; then
-        mount "$home_part" /mnt/home
-        mount_subvolumes "false"
-    else
-        mount_subvolumes "true"
+        mount --mkdir "$home_part" /mnt/home
     fi
 
     if [ "$keep_data" = "true" ]; then
-        mkdir /mnt/mnt/data
-        mount "$data_part" /mnt/mnt/data
+        mount --mkdir "$data_part" /mnt/mnt/data
     elif [ "$format_data" = "true" ]; then
-        mkdir /mnt/mnt/data
-        mount "$data_part" /mnt/mnt/data
+        mount --mkdir "$data_part" /mnt/mnt/data
     fi
 }
 
@@ -259,7 +219,11 @@ function do_install() {
     sed -i 's/#Color/Color/' /etc/pacman.conf
     sed -i 's/#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
 
-    pacstrap /mnt base linux linux-firmware nano amd-ucode btrfs-progs sudo pacman-contrib
+    local packages=()
+    #IFS=" "
+    read -r -a packages <<<"$base_packages"
+
+    pacstrap -K /mnt "${packages[@]}"
 
     sed -i 's/#Color/Color/' /mnt/etc/pacman.conf
     sed -i 's/#ParallelDownloads/ParallelDownloads/' /mnt/etc/pacman.conf
@@ -294,10 +258,12 @@ function do_config() {
 
     # Configure network
     echo "$hostname" >/mnt/etc/hostname
-    local hosts_content="127.0.0.1\tlocalhost\n"
-    hosts_content="${hosts_content}::1\t\tlocalhost\n"
-    hosts_content="${hosts_content}127.0.1.1\t${hostname}.localdomain\t${hostname}"
-    echo -e "$hosts_content" >>/mnt/etc/hosts
+
+    #local hosts_content="127.0.0.1\tlocalhost\n"
+    #hosts_content="${hosts_content}::1\t\tlocalhost\n"
+    #hosts_content="${hosts_content}127.0.1.1\t${hostname}.localdomain\t${hostname}"
+    #echo -e "$hosts_content" >>/mnt/etc/hosts
+
     pacman_install "networkmanager"
     arch-chroot /mnt systemctl enable NetworkManager.service
 
@@ -306,7 +272,7 @@ function do_config() {
     arch-chroot /mnt systemctl enable ntpd.service
 
     # Sudo
-    sed -i 's/# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /mnt/etc/sudoers
+    sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /mnt/etc/sudoers
 
     # VMware
     if [ "$vmware" == "true" ]; then
@@ -402,10 +368,18 @@ function do_kde() {
 
     if [ "$install_kde" == "true" ]; then
         pacman_install "$kde_base"
-        pacman_install "$kde_graphics"
-        pacman_install "$kde_multimedia"
-        pacman_install "$kde_system"
-        pacman_install "$kde_utilities"
+        if [ "$kde_graphics" != "" ]; then
+            pacman_install "$kde_graphics"
+        fi
+        if [ "$kde_multimedia" != "" ]; then
+            pacman_install "$kde_multimedia"
+        fi
+        if [ "$kde_system" != "" ]; then
+            pacman_install "$kde_system"
+        fi
+        if [ "$kde_utilities" != "" ]; then
+            pacman_install "$kde_utilities"
+        fi
 
         sed -i 's/TEMPLATES=Templates/#TEMPLATES=Templates/' /mnt/etc/xdg/user-dirs.defaults
         sed -i 's/PUBLICSHARE=Public/#PUBLICSHARE=Public/' /mnt/etc/xdg/user-dirs.defaults
@@ -433,9 +407,9 @@ function do_packages() {
 
 function execute_aur() {
     local command="$1"
-    arch-chroot /mnt sed -i 's/# %wheel ALL=(ALL) NOPASSWD: ALL$/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
+    arch-chroot /mnt sed -i 's/# %wheel ALL=(ALL:ALL) NOPASSWD: ALL$/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers
     arch-chroot /mnt bash -c "su ${sudo_user} -s /usr/bin/bash -c \"${command}\""
-    arch-chroot /mnt sed -i 's/%wheel ALL=(ALL) NOPASSWD: ALL$/# %wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
+    arch-chroot /mnt sed -i 's/%wheel ALL=(ALL:ALL) NOPASSWD: ALL$/# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers
 }
 
 function yay_install() {
@@ -443,7 +417,7 @@ function yay_install() {
 }
 
 function install_aur_base() {
-    pacman_install "base-devel git linux-headers"
+    pacman_install "base-devel"
 
     command="mkdir -p /home/${sudo_user}/.aur && cd /home/${sudo_user}/.aur && git clone https://aur.archlinux.org/yay.git && (cd yay && makepkg -si --noconfirm) && rm -rf /home/${sudo_user}/.aur/yay"
     execute_aur "$command"
@@ -464,7 +438,7 @@ function config_printer() {
 
         # shellcheck disable=SC2016
         sed -i 's|#Out /var/spool/cups-pdf/${USER}|Out ${HOME}|' /mnt/etc/cups/cups-pdf.conf
-        sed -i 's/hosts: files mymachines myhostname resolve \[!UNAVAIL=return\] dns/hosts: files mymachines myhostname mdns_minimal \[NOTFOUND=return\] resolve \[!UNAVAIL=return\] dns/' /mnt/etc/nsswitch.conf
+        sed -i 's/hosts: mymachines resolve \[!UNAVAIL=return\] files myhostname dns/hosts: mymachines mdns_minimal \[NOTFOUND=return\] resolve \[!UNAVAIL=return\] files myhostname dns/' /mnt/etc/nsswitch.conf
 
         arch-chroot /mnt systemctl enable cups.socket
         arch-chroot /mnt systemctl enable avahi-daemon.service
@@ -512,14 +486,6 @@ function install_vmware() {
     fi
 }
 
-function install_snapper() {
-    if [ "$install_snapper" == "true" ]; then
-        pacman_install "snapper snap-pac"
-        cp /mnt/etc/snapper/config-templates/default /mnt/etc/snapper/configs/root
-        sed -i 's/SNAPPER_CONFIGS=\"\"/SNAPPER_CONFIGS=\"root\"/' /mnt/etc/conf.d/snapper
-    fi
-}
-
 function do_customize() {
     print_step "do_customize()"
 
@@ -527,17 +493,16 @@ function do_customize() {
     config_optimus
     config_lid_switch
     install_vmware
-    install_snapper
 }
 
 function do_grub() {
     print_step "do_grub()"
 
     arch-chroot /mnt bash -c "SNAP_PAC_SKIP=y pacman -S --noconfirm --needed grub efibootmgr"
-    arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
+    arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory="$efi_dir" --bootloader-id=GRUB
 
     if [ "$grub_removable" = "true" ]; then
-        arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --removable
+        arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory="$efi_dir" --removable
     fi
 
     if [ "$nvidia_driver" == "true" ]; then
@@ -546,7 +511,7 @@ function do_grub() {
 
     sed -i 's/GRUB_TIMEOUT=5/GRUB_TIMEOUT=2/' /mnt/etc/default/grub
 
-    arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+    arch-chroot /mnt grub-mkconfig -o "$efi_dir"/grub/grub.cfg
 }
 
 function do_cleanup() {
