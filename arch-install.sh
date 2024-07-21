@@ -363,6 +363,17 @@ function do_xorg() {
     fi
 }
 
+function do_wayland() {
+    print_step "do_wayland()"
+
+    if [ "$install_wayland" == "true" ]; then
+        #IFS=' '
+        for driver in $video_drivers; do
+            install_video_driver $driver
+        done
+    fi
+}
+
 function do_kde() {
     print_step "do_kde()"
 
@@ -572,7 +583,7 @@ function do_steps() {
 
 function main() {
     local step=""
-    local steps="do_partition do_format do_mount do_install do_config do_users do_xorg do_kde do_packages do_aur do_customize do_grub do_cleanup"
+    local steps="do_partition do_format do_mount do_install do_config do_users do_xorg do_wayland do_kde do_packages do_aur do_customize do_grub do_cleanup"
 
     if [ "$#" != 0 ]; then
         step="$1"
